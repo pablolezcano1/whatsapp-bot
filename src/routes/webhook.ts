@@ -3,28 +3,43 @@ import { handleIncomingMessage } from '../services/flow.service';
 
 const router = Router();
 
-// Twilio envía los mensajes entrantes a este endpoint via POST
+// Tipos de mensaje que Twilio puede enviarnos
+const TIPOS_NO_SOPORTADOS = ['audio', 'image', 'video', 'document', 'sticker', 'location'];
+
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const from: string = req.body.From;       // ej: whatsapp:+5491123456789
-    const body: string = req.body.Body || ''; // texto del mensaje
+    const from: string = req.body.From;
+    const body: string = req.body.Body || '';
+    const mediaType: string = req.body.MediaContentType0 || '';
+    const numMedia: number = parseInt(req.body.NumMedia || '0');
 
-    if (!from || !body) {
+    if (!from) {
       res.status(400).send('Faltan datos');
       return;
     }
 
-    console.log(`📨 Mensaje de ${from}: "${body}"`);
-
-    // Responde 200 inmediatamente a Twilio (requerido)
+    // Responde 200 a Twilio inmediatamente
     res.status(200).send('OK');
 
-    // Procesa el mensaje de forma asíncrona
+    console.log(`📨 Mensaje de ${from}: "${body}" | Media: ${numMedia}`);
+
+    // Si mandó un archivo multimedia sin texto
+    if (numMedia > 0 && !body) {
+      const { sendMessage } = await import('../services/whatsapp.service');
+      await sendMessage(from,
+        '¡Hola! Por el momento solo puedo leer mensajes de texto 😊\n\n' +
+        'Escribí *menú* para ver las opciones disponibles.'
+      );
+      return;
+    }
+
+    // Si no hay texto (caso raro)
+    if (!body.trim()) return;
+
     await handleIncomingMessage(from, body);
 
   } catch (error) {
     console.error('Error en webhook:', error);
-    // Si ya enviamos 200, no podemos cambiar el status
   }
 });
 
