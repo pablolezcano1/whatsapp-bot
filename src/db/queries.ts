@@ -100,3 +100,22 @@ export async function clearOwnerPendingAction(appointmentId: number): Promise<vo
     'DELETE FROM owner_pending_actions WHERE appointment_id = $1', [appointmentId]
   );
 }
+
+// Busca el último turno confirmado de un cliente
+export async function getLastConfirmedAppointment(phone: string) {
+  const result = await pool.query(
+    `SELECT * FROM appointment_requests 
+     WHERE phone = $1 AND status = 'confirmado'
+     ORDER BY created_at DESC LIMIT 1`,
+    [phone]
+  );
+  return result.rows[0] || null;
+}
+
+// Cancela un turno por ID
+export async function cancelAppointment(id: number): Promise<void> {
+  await pool.query(
+    `UPDATE appointment_requests SET status = 'cancelado' WHERE id = $1`,
+    [id]
+  );
+}

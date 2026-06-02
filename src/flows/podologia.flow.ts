@@ -3,7 +3,9 @@ import {
   updateConversation, saveAppointmentRequest,
   getOwnerPendingAction, confirmAppointment,
   rejectAppointment, saveOwnerPendingAction,
-  clearOwnerPendingAction, getAppointmentById
+  clearOwnerPendingAction, getAppointmentById,
+  getLastConfirmedAppointment,cancelAppointment 
+
 } from '../db/queries';
 import { Conversation } from '../db/queries';
 import { config } from '../config';
@@ -180,6 +182,53 @@ export async function processMessage(
       break;
     }
 
+    case 'cancelar_turno': {
+      const turno = await getLastConfirmedAppointment(phone);
+
+      if (!turno) {
+        await sendMessage(phone,
+          'No encontramos ningún turno confirmado para cancelar.\n\n' +
+          'Escribí *menú* para volver al inicio.'
+        );
+        await updateConversation(phone, 'menu_principal', {});
+        return;
+      }
+
+      if (msg === 'cancelar') {
+        // Primera vez que llega — pregunta confirmación
+        await sendMessage(phone,
+          `⚠️ ¿Confirmás la cancelación de tu turno?\n\n` +
+          `📅 ${turno.confirmed_day} a las ${turno.confirmed_time}\n` +
+          `💆 Servicio: ${turno.service}\n\n` +
+          `Respondé *sí* para cancelar o *no* para mantenerlo.`
+        );
+        await updateConversation(phone, 'cancelar_turno', { appointmentId: turno.id });
+        return;
+      }
+
+      if (msg === 'sí' || msg === 'si') {
+        await cancelAppointment(context.appointmentId!);
+        await notifyOwner(
+          `❌ Turno cancelado:\n` +
+          `👤 ${turno.name}\n` +
+          `📅 ${turno.confirmed_day} ${turno.confirmed_time}\n` +
+          `💆 ${turno.service}`
+        );
+        await sendMessage(phone,
+          `✅ Tu turno fue cancelado.\n\n` +
+          `Si querés sacar uno nuevo escribí *menú*. ¡Hasta pronto! 👋`
+        );
+        await updateConversation(phone, 'menu_principal', {});
+
+      } else if (msg === 'no') {
+        await sendMessage(phone, '👍 Perfecto, tu turno sigue confirmado. ¡Te esperamos!');
+        await updateConversation(phone, 'menu_principal', {});
+
+      } else {
+        await sendMessage(phone, 'Respondé *sí* para cancelar el turno o *no* para mantenerlo.');
+      }
+      break;
+    }
     case 'esperando_confirmacion':
       await sendMessage(phone, '⏳ Tu solicitud ya está en proceso. En breve te confirmamos. ¡Gracias por tu paciencia!');
       break;
