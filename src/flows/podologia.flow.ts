@@ -4,8 +4,7 @@ import {
   getOwnerPendingAction, confirmAppointment,
   rejectAppointment, saveOwnerPendingAction,
   clearOwnerPendingAction, getAppointmentById,
-  getLastConfirmedAppointment,cancelAppointment 
-
+  getLastConfirmedAppointment, cancelAppointment
 } from '../db/queries';
 import { Conversation } from '../db/queries';
 import { config } from '../config';
@@ -38,22 +37,25 @@ const HORARIOS = `🕐 *Horarios de atención:*
 📅 Sábados: 9:00 a 13:00
 📵 Domingos y feriados: cerrado
 
-📍 *Dirección:* Sargento Cabral 383`;
+📍 *Dirección:* [Tu dirección aquí]`;
 
-const MENU_PRINCIPAL = `👋 ¡Hola! Bienvenido/a a Milena Podoestetica 🦶
+const MENU_PRINCIPAL = `👋 ¡Hola! Bienvenido/a a *[Nombre del negocio]* 🦶
 
 ¿En qué te puedo ayudar?
 
-1️⃣ Ver servicios
-2️⃣ Horarios y ubicación  
+1️⃣ Ver servicios y precios
+2️⃣ Horarios y ubicación
 3️⃣ Solicitar un turno
 4️⃣ Hablar con la profesional
 
 Respondé con el número de tu opción.`;
 
-// Detecta si el mensaje viene del dueño del negocio
+// Compara el número entrante con el del dueño configurado
 function isOwner(phone: string): boolean {
-  return phone === config.ownerWhatsapp;
+  const owner = config.ownerWhatsapp.trim().toLowerCase();
+  const incoming = phone.trim().toLowerCase();
+  console.log(`🔍 Comparando dueño: [${owner}] vs entrante: [${incoming}]`);
+  return owner === incoming;
 }
 
 export async function processMessage(
@@ -65,11 +67,12 @@ export async function processMessage(
   const context = conversation.context as FlowContext;
   const { state } = conversation;
 
-  // ── FLUJO DEL DUEÑO ──────────────────────────────────────────
-    if (isOwner(phone)) {
+  // ── FLUJO DEL DUEÑO — se chequea SIEMPRE primero ─────────────
+  if (isOwner(phone)) {
+    console.log(`👑 Mensaje del dueño recibido: "${incomingMessage}"`);
     await handleOwnerMessage(msg, incomingMessage, phone, conversation);
     return;
-   }
+  }
 
   // ── FLUJO DEL CLIENTE ─────────────────────────────────────────
   switch (state) {
@@ -116,22 +119,21 @@ export async function processMessage(
       await updateConversation(phone, 'turno_dia1', { ...context, service: servicio });
       await sendMessage(phone,
         `Perfecto, anotamos *${servicio}*. 📋\n\n` +
-        `Ahora necesito *dos opciones de turno* por si la primera no tiene disponibilidad.\n\n` +
-        `📅 *Opción 1:* ¿Qué día preferís? (ej: "lunes", "martes 20 de junio")`
+        `Necesito *dos opciones de turno* por si la primera no tiene disponibilidad.\n\n` +
+        `📅 *Opción 1:* ¿Qué día preferís?`
       );
       break;
     }
 
     case 'turno_dia1':
       await updateConversation(phone, 'turno_hora1', { ...context, preferredDay: incomingMessage.trim() });
-      await sendMessage(phone, `⏰ ¿Y en qué horario para esa opción? (ej: "10hs", "después de las 15hs")`);
+      await sendMessage(phone, `⏰ ¿Y en qué horario para esa opción?`);
       break;
 
     case 'turno_hora1':
       await updateConversation(phone, 'turno_dia2', { ...context, preferredTime: incomingMessage.trim() });
       await sendMessage(phone,
-        `✅ Opción 1 anotada.\n\n` +
-        `📅 *Opción 2 (alternativa):* ¿Qué otro día te vendría bien?`
+        `✅ Opción 1 anotada.\n\n📅 *Opción 2 (alternativa):* ¿Qué otro día te vendría bien?`
       );
       break;
 
@@ -155,7 +157,6 @@ export async function processMessage(
 
       await saveOwnerPendingAction(appointmentId);
 
-      // Notificar al dueño con las opciones
       await notifyOwner(
         `🔔 *Nueva solicitud de turno #${appointmentId}*\n\n` +
         `👤 Cliente: ${finalCtx.name}\n` +
@@ -182,20 +183,22 @@ export async function processMessage(
       break;
     }
 
+    case 'esperando_confirmacion':
+      await sendMessage(phone, '⏳ Tu solicitud ya está en proceso. En breve te confirmamos. ¡Gracias por tu paciencia!');
+      break;
+
     case 'cancelar_turno': {
       const turno = await getLastConfirmedAppointment(phone);
 
       if (!turno) {
         await sendMessage(phone,
-          'No encontramos ningún turno confirmado para cancelar.\n\n' +
-          'Escribí *menú* para volver al inicio.'
+          'No encontramos ningún turno confirmado para cancelar.\n\nEscribí *menú* para volver al inicio.'
         );
         await updateConversation(phone, 'menu_principal', {});
         return;
       }
 
       if (msg === 'cancelar') {
-        // Primera vez que llega — pregunta confirmación
         await sendMessage(phone,
           `⚠️ ¿Confirmás la cancelación de tu turno?\n\n` +
           `📅 ${turno.confirmed_day} a las ${turno.confirmed_time}\n` +
@@ -209,64 +212,44 @@ export async function processMessage(
       if (msg === 'sí' || msg === 'si') {
         await cancelAppointment(context.appointmentId!);
         await notifyOwner(
-          `❌ Turno cancelado:\n` +
-          `👤 ${turno.name}\n` +
-          `📅 ${turno.confirmed_day} ${turno.confirmed_time}\n` +
-          `💆 ${turno.service}`
+          `❌ Turno cancelado:\n👤 ${turno.name}\n📅 ${turno.confirmed_day} ${turno.confirmed_time}\n💆 ${turno.service}`
         );
         await sendMessage(phone,
-          `✅ Tu turno fue cancelado.\n\n` +
-          `Si querés sacar uno nuevo escribí *menú*. ¡Hasta pronto! 👋`
+          `✅ Tu turno fue cancelado.\n\nSi querés sacar uno nuevo escribí *menú*. ¡Hasta pronto! 👋`
         );
         await updateConversation(phone, 'menu_principal', {});
-
       } else if (msg === 'no') {
         await sendMessage(phone, '👍 Perfecto, tu turno sigue confirmado. ¡Te esperamos!');
         await updateConversation(phone, 'menu_principal', {});
-
       } else {
         await sendMessage(phone, 'Respondé *sí* para cancelar el turno o *no* para mantenerlo.');
       }
       break;
     }
-    case 'esperando_confirmacion':
-      await sendMessage(phone, '⏳ Tu solicitud ya está en proceso. En breve te confirmamos. ¡Gracias por tu paciencia!');
-      break;
 
-    // Cliente responde a contraoferta del dueño
     case 'cliente_respondiendo_contraoferta': {
       const appt = await getAppointmentById(context.appointmentId!);
       if (!appt) return;
 
       if (msg === 'sí' || msg === 'si') {
-        await confirmAppointment(
-          context.appointmentId!,
-          context.counterOfferDay!,
-          context.counterOfferTime!
-        );
+        await confirmAppointment(context.appointmentId!, context.counterOfferDay!, context.counterOfferTime!);
         await clearOwnerPendingAction(context.appointmentId!);
-
         await sendMessage(phone,
           `✅ *¡Turno confirmado!*\n\n` +
           `📅 ${context.counterOfferDay} a las ${context.counterOfferTime}\n` +
-          `💆 Servicio: ${appt.service}\n\n` +
-          `¡Te esperamos! 🦶`
+          `💆 Servicio: ${appt.service}\n\n¡Te esperamos! 🦶`
         );
         await notifyOwner(
-          `✅ El cliente *${appt.name}* aceptó el turno propuesto:\n` +
-          `📅 ${context.counterOfferDay} ${context.counterOfferTime}`
+          `✅ ${appt.name} aceptó el turno:\n📅 ${context.counterOfferDay} ${context.counterOfferTime}`
         );
         await updateConversation(phone, 'menu_principal', {});
-
       } else if (msg === 'no') {
         await sendMessage(phone,
-          `Entendemos. Si querés intentar con otra fecha escribí *menú* y solicitá un nuevo turno, ` +
-          `o escribí directamente el día y horario que te quedaría bien.`
+          `Entendemos. Escribí *menú* para solicitar un nuevo turno.`
         );
         await updateConversation(phone, 'menu_principal', {});
-
       } else {
-        await sendMessage(phone, 'Por favor respondé *sí* para aceptar o *no* para rechazar el horario propuesto.');
+        await sendMessage(phone, 'Respondé *sí* para aceptar o *no* para rechazar el horario propuesto.');
       }
       break;
     }
@@ -280,7 +263,7 @@ export async function processMessage(
   }
 }
 
-// ── MANEJO DE MENSAJES DEL DUEÑO ─────────────────────────────────
+// ── MANEJO DE MENSAJES DEL DUEÑO ──────────────────────────────────
 async function handleOwnerMessage(
   msg: string,
   rawMsg: string,
@@ -291,18 +274,16 @@ async function handleOwnerMessage(
   const pending = await getOwnerPendingAction();
 
   if (!pending) {
-    await sendMessage(phone, 'No hay solicitudes de turno pendientes en este momento.');
+    await sendMessage(phone, '📭 No hay solicitudes de turno pendientes en este momento.');
     return;
   }
 
   const apptId: number = pending.appointment_id;
   const clientPhone: string = pending.client_phone;
 
-  // Opción 1 — Confirmar turno 1
   if (msg === '1') {
     await confirmAppointment(apptId, pending.preferred_day, pending.preferred_time);
     await clearOwnerPendingAction(apptId);
-
     await sendMessage(clientPhone,
       `✅ *¡Tu turno fue confirmado!*\n\n` +
       `👤 ${pending.name}\n` +
@@ -312,11 +293,9 @@ async function handleOwnerMessage(
     );
     await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`);
 
-  // Opción 2 — Confirmar turno 2
   } else if (msg === '2') {
     await confirmAppointment(apptId, pending.preferred_day_2, pending.preferred_time_2);
     await clearOwnerPendingAction(apptId);
-
     await sendMessage(clientPhone,
       `✅ *¡Tu turno fue confirmado!*\n\n` +
       `👤 ${pending.name}\n` +
@@ -326,29 +305,23 @@ async function handleOwnerMessage(
     );
     await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`);
 
-  // Opción 3 — Ofrecer otro horario: "3 miércoles 17:00"
   } else if (msg.startsWith('3')) {
     const parts = rawMsg.trim().split(' ');
-    // Formato: "3 miércoles 17:00"
     if (parts.length < 3) {
       await sendMessage(phone,
         `Para ofrecer otro horario escribí:\n*3 [día] [hora]*\n\nEjemplo: _3 miércoles 17:00_`
       );
       return;
     }
-
     const offerDay = parts[1];
     const offerTime = parts.slice(2).join(' ');
 
     await rejectAppointment(apptId);
-
-    // Actualizar contexto del cliente para manejar su respuesta
     await updateConversation(clientPhone, 'cliente_respondiendo_contraoferta', {
       appointmentId: apptId,
       counterOfferDay: offerDay,
       counterOfferTime: offerTime,
     });
-
     await sendMessage(clientPhone,
       `Hola ${pending.name} 👋\n\n` +
       `Lamentablemente no tenemos disponibilidad en los horarios que pediste.\n\n` +
@@ -359,10 +332,7 @@ async function handleOwnerMessage(
 
   } else {
     await sendMessage(phone,
-      `No entendí. Respondé:\n` +
-      `*1* → Confirmar opción 1\n` +
-      `*2* → Confirmar opción 2\n` +
-      `*3 [día] [hora]* → Ofrecer otro horario`
+      `No entendí. Respondé:\n*1* → Confirmar opción 1\n*2* → Confirmar opción 2\n*3 [día] [hora]* → Ofrecer otro horario`
     );
   }
 }
