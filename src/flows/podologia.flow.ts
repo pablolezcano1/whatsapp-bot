@@ -85,7 +85,7 @@ export async function processMessage(
     case 'menu_principal':
       if (msg === '1') {
         await sendMessage(phone, SERVICIOS);
-        await sendMessage(phone, 'Escribí *menú* para volver al inicio o *3* para pedir turno.');
+        await sendMessage(phone, 'Escribí *menu* para volver al inicio o *3* para pedir turno.');
       } else if (msg === '2') {
         await sendMessage(phone, HORARIOS);
       } else if (msg === '3') {
