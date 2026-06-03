@@ -66,10 +66,10 @@ export async function processMessage(
   const { state } = conversation;
 
   // ── FLUJO DEL DUEÑO ──────────────────────────────────────────
-  // if (isOwner(phone)) {
-  //   await handleOwnerMessage(msg, incomingMessage, phone, conversation);
-  //   return;
-  // }
+    if (isOwner(phone)) {
+    await handleOwnerMessage(msg, incomingMessage, phone, conversation);
+    return;
+   }
 
   // ── FLUJO DEL CLIENTE ─────────────────────────────────────────
   switch (state) {

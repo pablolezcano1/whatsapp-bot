@@ -1,11 +1,23 @@
 import { getOrCreateConversation, updateConversation } from '../db/queries';
 import { processMessage } from '../flows/podologia.flow';
+import { config } from '../config';
+
+function isOwner(phone: string): boolean {
+  return phone.trim().toLowerCase() === config.ownerWhatsapp.trim().toLowerCase();
+}
 
 export async function handleIncomingMessage(phone: string, message: string): Promise<void> {
   const conversation = await getOrCreateConversation(phone);
   const msg = message.trim().toLowerCase();
 
-  // Palabras clave globales — funcionan desde cualquier estado
+  // Si es el dueño, va DIRECTO al processMessage sin tocar el estado
+  if (isOwner(phone)) {
+    console.log(`👑 Dueño detectado, procesando como dueño`);
+    await processMessage(conversation, message, phone);
+    return;
+  }
+
+  // Solo para clientes — palabras clave globales
   if (msg === 'menú' || msg === 'menu') {
     await updateConversation(phone, 'inicio', {});
     const fresh = { ...conversation, state: 'inicio', context: {} };
