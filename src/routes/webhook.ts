@@ -8,7 +8,8 @@ const TIPOS_NO_SOPORTADOS = ['audio', 'image', 'video', 'document', 'sticker', '
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const from: string = req.body.From;
+    const from: string = req.body.From; // número del cliente/dueño
+    const to: string = req.body.To;  // número Twilio del negocio ← NUEVO
     const body: string = req.body.Body || '';
     const mediaType: string = req.body.MediaContentType0 || '';
     const numMedia: number = parseInt(req.body.NumMedia || '0');
@@ -36,7 +37,7 @@ router.post('/', async (req: Request, res: Response) => {
     // Si no hay texto (caso raro)
     if (!body.trim()) return;
 
-    await handleIncomingMessage(from, body);
+    await handleIncomingMessage(from, body, to);
 
   } catch (error) {
     console.error('Error en webhook:', error);

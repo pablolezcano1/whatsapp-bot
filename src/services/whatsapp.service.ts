@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { config } from '../config';
+import { Business } from '../db/queries';
 
 const client = twilio(config.twilio.accountSid, config.twilio.authToken);
 
@@ -17,8 +18,7 @@ export async function sendMessage(to: string, body: string): Promise<void> {
   }
 }
 
-// Notifica al dueño del negocio
-export async function notifyOwner(message: string): Promise<void> {
-  if (!config.ownerWhatsapp) return;
-  await sendMessage(config.ownerWhatsapp, `🔔 NOTIFICACIÓN BOT\n\n${message}`);
+// Notifica al dueño del negocio específico
+export async function notifyOwner(business: Business, message: string): Promise<void> {
+  await sendMessage(business.owner_phone, `🔔 ${message}`);
 }

@@ -4,10 +4,9 @@ import {
   getOwnerPendingAction, confirmAppointment,
   rejectAppointment, saveOwnerPendingAction,
   clearOwnerPendingAction, getAppointmentById,
-  getLastConfirmedAppointment, cancelAppointment
+  getLastConfirmedAppointment, cancelAppointment,
+  Conversation, Business
 } from '../db/queries';
-import { Conversation } from '../db/queries';
-import { config } from '../config';
 
 interface FlowContext {
   name?: string;
@@ -50,27 +49,21 @@ const MENU_PRINCIPAL = `👋 ¡Hola! Bienvenido/a a *[Nombre del negocio]* 🦶
 
 Respondé con el número de tu opción.`;
 
-// Compara el número entrante con el del dueño configurado
-function isOwner(phone: string): boolean {
-  const owner = config.ownerWhatsapp.trim().toLowerCase();
-  const incoming = phone.trim().toLowerCase();
-  console.log(`🔍 Comparando dueño: [${owner}] vs entrante: [${incoming}]`);
-  return owner === incoming;
-}
-
 export async function processMessage(
   conversation: Conversation,
   incomingMessage: string,
-  phone: string
+  phone: string,
+  business: Business,
+  isOwnerFlag: boolean
 ): Promise<void> {
   const msg = incomingMessage.trim().toLowerCase();
   const context = conversation.context as FlowContext;
   const { state } = conversation;
 
-  // ── FLUJO DEL DUEÑO — se chequea SIEMPRE primero ─────────────
-  if (isOwner(phone)) {
+  // ── FLUJO DEL DUEÑO ───────────────────────────────────────────
+  if (isOwnerFlag) {
     console.log(`👑 Mensaje del dueño recibido: "${incomingMessage}"`);
-    await handleOwnerMessage(msg, incomingMessage, phone, conversation);
+    await handleOwnerMessage(msg, incomingMessage, phone, business);
     return;
   }
 
@@ -93,7 +86,7 @@ export async function processMessage(
         await updateConversation(phone, 'turno_nombre', {});
       } else if (msg === '4') {
         await sendMessage(phone, '👩‍⚕️ En breve la profesional se comunica con vos.');
-        await notifyOwner(`📲 ${phone} quiere hablar directamente con vos.`);
+        await notifyOwner(business, `📲 ${phone} quiere hablar directamente con vos.`);
       } else {
         await sendMessage(phone, 'Por favor elegí una opción del 1 al 4.');
       }
@@ -157,8 +150,8 @@ export async function processMessage(
 
       await saveOwnerPendingAction(appointmentId);
 
-      await notifyOwner(
-        `🔔 *Nueva solicitud de turno #${appointmentId}*\n\n` +
+      await notifyOwner(business,
+        `*Nueva solicitud de turno #${appointmentId}*\n\n` +
         `👤 Cliente: ${finalCtx.name}\n` +
         `💆 Servicio: ${finalCtx.service}\n\n` +
         `📅 *Opción 1:* ${finalCtx.preferredDay} a las ${finalCtx.preferredTime}\n` +
@@ -211,7 +204,7 @@ export async function processMessage(
 
       if (msg === 'sí' || msg === 'si') {
         await cancelAppointment(context.appointmentId!);
-        await notifyOwner(
+        await notifyOwner(business,
           `❌ Turno cancelado:\n👤 ${turno.name}\n📅 ${turno.confirmed_day} ${turno.confirmed_time}\n💆 ${turno.service}`
         );
         await sendMessage(phone,
@@ -239,14 +232,12 @@ export async function processMessage(
           `📅 ${context.counterOfferDay} a las ${context.counterOfferTime}\n` +
           `💆 Servicio: ${appt.service}\n\n¡Te esperamos! 🦶`
         );
-        await notifyOwner(
+        await notifyOwner(business,
           `✅ ${appt.name} aceptó el turno:\n📅 ${context.counterOfferDay} ${context.counterOfferTime}`
         );
         await updateConversation(phone, 'menu_principal', {});
       } else if (msg === 'no') {
-        await sendMessage(phone,
-          `Entendemos. Escribí *menú* para solicitar un nuevo turno.`
-        );
+        await sendMessage(phone, `Entendemos. Escribí *menú* para solicitar un nuevo turno.`);
         await updateConversation(phone, 'menu_principal', {});
       } else {
         await sendMessage(phone, 'Respondé *sí* para aceptar o *no* para rechazar el horario propuesto.');
@@ -268,7 +259,7 @@ async function handleOwnerMessage(
   msg: string,
   rawMsg: string,
   phone: string,
-  _conversation: Conversation
+  business: Business
 ): Promise<void> {
 
   const pending = await getOwnerPendingAction();

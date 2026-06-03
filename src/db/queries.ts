@@ -119,3 +119,39 @@ export async function cancelAppointment(id: number): Promise<void> {
     [id]
   );
 }
+
+export interface Business {
+  id: number;
+  name: string;
+  bot_number: string;
+  owner_phone: string;
+  flow_type: string;
+  active: boolean;
+}
+
+// Busca el negocio por el número de Twilio que recibió el mensaje
+export async function getBusinessByBotNumber(botNumber: string): Promise<Business | null> {
+  const result = await pool.query(
+    'SELECT * FROM businesses WHERE bot_number = $1 AND active = true',
+    [botNumber]
+  );
+  return result.rows[0] || null;
+}
+
+// Obtiene o crea conversación vinculada a un negocio
+export async function getOrCreateConversationForBusiness(
+  phone: string,
+  businessId: number
+): Promise<Conversation> {
+  const existing = await pool.query(
+    'SELECT * FROM conversations WHERE phone = $1 AND business_id = $2',
+    [phone, businessId]
+  );
+  if (existing.rows.length > 0) return existing.rows[0];
+
+  const created = await pool.query(
+    'INSERT INTO conversations (phone, state, context, business_id) VALUES ($1, $2, $3, $4) RETURNING *',
+    [phone, 'inicio', {}, businessId]
+  );
+  return created.rows[0];
+}
