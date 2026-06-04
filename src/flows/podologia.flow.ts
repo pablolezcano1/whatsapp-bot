@@ -1,4 +1,5 @@
 import { sendMessage, notifyOwner } from '../services/whatsapp.service';
+import { isValidDate, isValidTime, parseDateTime, formatDateTimeReadable } from '../utils/datetime.utils';
 import {
   updateConversation, saveAppointmentRequest,
   getOwnerPendingAction, confirmAppointment,
@@ -15,9 +16,12 @@ interface FlowContext {
   preferredTime?: string;
   preferredDay2?: string;
   preferredTime2?: string;
+  preferredDatetime1?: string; // ISO string
+  preferredDatetime2?: string; // ISO string
   appointmentId?: number;
   counterOfferDay?: string;
   counterOfferTime?: string;
+  counterOfferDatetime?: string; // ISO string
 }
 
 const SERVICIOS = `🦶 *Nuestros servicios:*
@@ -120,25 +124,83 @@ export async function processMessage(
       break;
     }
 
-    case 'turno_dia1':
+    case 'turno_dia1': {
+      if (!isValidDate(incomingMessage.trim())) {
+        await sendMessage(phone,
+          `⚠️ Formato de fecha incorrecto.\n\n` +
+          `Por favor ingresá la fecha así: *DD/MM/YYYY*\n` +
+          `Ejemplo: *17/06/2025*\n\n` +
+          `La fecha no puede ser en el pasado.`,
+          business.bot_number
+        );
+        return; // No avanza de estado
+      }
       await updateConversation(phone, 'turno_hora1', { ...context, preferredDay: incomingMessage.trim() });
-      await sendMessage(phone, `⏰ ¿Y en qué horario para esa opción?`, business.bot_number);
-      break;
-
-    case 'turno_hora1':
-      await updateConversation(phone, 'turno_dia2', { ...context, preferredTime: incomingMessage.trim() });
       await sendMessage(phone,
-        `✅ Opción 1 anotada.\n\n📅 *Opción 2 (alternativa):* ¿Qué otro día te vendría bien?`, business.bot_number
+        `⏰ ¿Y en qué horario?\n\nUsá el formato *HH:MM* en 24 horas.\nEjemplo: *09:30*, *14:00*, *18:30*`,
+        business.bot_number
       );
       break;
+    }
 
-    case 'turno_dia2':
-      await updateConversation(phone, 'turno_hora2', { ...context, preferredDay2: incomingMessage.trim() });
-      await sendMessage(phone, `⏰ ¿Y el horario para esa segunda opción?`, business.bot_number);
+    case 'turno_hora1': {
+      if (!isValidTime(incomingMessage.trim())) {
+        await sendMessage(phone,
+          `⚠️ Formato de horario incorrecto.\n\n` +
+          `Usá el formato *HH:MM*\nEjemplo: *09:30*, *14:00*, *18:30*`,
+          business.bot_number
+        );
+        return;
+      }
+      const dt1 = parseDateTime(context.preferredDay!, incomingMessage.trim());
+      const newCtx = {
+        ...context,
+        preferredTime: incomingMessage.trim(),
+        preferredDatetime1: dt1.toISOString(),
+      };
+      await updateConversation(phone, 'turno_dia2', newCtx);
+      await sendMessage(phone,
+        `✅ *Opción 1 anotada:* ${formatDateTimeReadable(dt1)}\n\n` +
+        `📅 *Opción 2 (alternativa):*\n` +
+        `¿Qué otro día te vendría bien?\n\nFormato: *DD/MM/YYYY*`,
+        business.bot_number
+      );
       break;
+    }
+
+    case 'turno_dia2': {
+      if (!isValidDate(incomingMessage.trim())) {
+        await sendMessage(phone,
+          `⚠️ Formato incorrecto. Ingresá la fecha así: *DD/MM/YYYY*\nEjemplo: *20/06/2025*`,
+          business.bot_number
+        );
+        return;
+      }
+      await updateConversation(phone, 'turno_hora2', { ...context, preferredDay2: incomingMessage.trim() });
+      await sendMessage(phone,
+        `⏰ ¿Y el horario para esa segunda opción?\n\nFormato: *HH:MM*\nEjemplo: *10:00*, *15:30*`,
+        business.bot_number
+      );
+      break;
+    }
 
     case 'turno_hora2': {
-      const finalCtx: FlowContext = { ...context, preferredTime2: incomingMessage.trim() };
+      if (!isValidTime(incomingMessage.trim())) {
+        await sendMessage(phone,
+          `⚠️ Formato incorrecto. Usá *HH:MM*\nEjemplo: *10:00*, *15:30*`,
+          business.bot_number
+        );
+        return;
+      }
+
+      const dt2 = parseDateTime(context.preferredDay2!, incomingMessage.trim());
+      const dt1 = new Date(context.preferredDatetime1!);
+
+      const finalCtx: FlowContext = {
+        ...context,
+        preferredTime2: incomingMessage.trim(),
+        preferredDatetime2: dt2.toISOString(),
+      };
 
       const appointmentId = await saveAppointmentRequest({
         phone,
@@ -148,6 +210,8 @@ export async function processMessage(
         preferredTime: finalCtx.preferredTime || '',
         preferredDay2: finalCtx.preferredDay2 || '',
         preferredTime2: finalCtx.preferredTime2 || '',
+        preferredDatetime1: dt1,
+        preferredDatetime2: dt2,
       });
 
       await saveOwnerPendingAction(appointmentId);
@@ -156,22 +220,19 @@ export async function processMessage(
         `*Nueva solicitud de turno #${appointmentId}*\n\n` +
         `👤 Cliente: ${finalCtx.name}\n` +
         `💆 Servicio: ${finalCtx.service}\n\n` +
-        `📅 *Opción 1:* ${finalCtx.preferredDay} a las ${finalCtx.preferredTime}\n` +
-        `📅 *Opción 2:* ${finalCtx.preferredDay2} a las ${finalCtx.preferredTime2}\n\n` +
-        `Respondé:\n` +
-        `*1* → Confirmar opción 1\n` +
-        `*2* → Confirmar opción 2\n` +
-        `*3 [día] [hora]* → Ofrecer otro horario\n` +
-        `_(ej: "3 miércoles 17:00")_`
+        `📅 *Opción 1:* ${formatDateTimeReadable(dt1)}\n` +
+        `📅 *Opción 2:* ${formatDateTimeReadable(dt2)}\n\n` +
+        `Respondé:\n*1* → Confirmar opción 1\n*2* → Confirmar opción 2\n*3 DD/MM/YYYY HH:MM* → Ofrecer otro horario`
       );
 
       await sendMessage(phone,
         `✅ ¡Solicitud registrada!\n\n` +
         `📋 *Resumen:*\n` +
         `• Servicio: ${finalCtx.service}\n` +
-        `• Opción 1: ${finalCtx.preferredDay} ${finalCtx.preferredTime}\n` +
-        `• Opción 2: ${finalCtx.preferredDay2} ${finalCtx.preferredTime2}\n\n` +
-        `⏳ En breve te confirmamos el turno. ¡Gracias!`, business.bot_number
+        `• Opción 1: ${formatDateTimeReadable(dt1)}\n` +
+        `• Opción 2: ${formatDateTimeReadable(dt2)}\n\n` +
+        `⏳ En breve te confirmamos el turno. ¡Gracias!`,
+        business.bot_number
       );
 
       await updateConversation(phone, 'esperando_confirmacion', { appointmentId });
@@ -227,7 +288,10 @@ export async function processMessage(
       if (!appt) return;
 
       if (msg === 'sí' || msg === 'si') {
-        await confirmAppointment(context.appointmentId!, context.counterOfferDay!, context.counterOfferTime!);
+        const confirmedDt = context.counterOfferDatetime
+          ? new Date(context.counterOfferDatetime)
+          : undefined;
+        await confirmAppointment(context.appointmentId!, context.counterOfferDay!, context.counterOfferTime!, confirmedDt);
         await clearOwnerPendingAction(context.appointmentId!);
         await sendMessage(phone,
           `✅ *¡Turno confirmado!*\n\n` +
@@ -275,7 +339,10 @@ async function handleOwnerMessage(
   const clientPhone: string = pending.client_phone;
 
   if (msg === '1') {
-    await confirmAppointment(apptId, pending.preferred_day, pending.preferred_time);
+    const dt1 = pending.preferred_datetime_1
+    ? new Date(pending.preferred_datetime_1)
+    : undefined;
+    await confirmAppointment(apptId, pending.preferred_day, pending.preferred_time, dt1);
     await clearOwnerPendingAction(apptId);
     await sendMessage(clientPhone,
       `✅ *¡Tu turno fue confirmado!*\n\n` +
@@ -287,7 +354,10 @@ async function handleOwnerMessage(
     await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`, business.bot_number);
 
   } else if (msg === '2') {
-    await confirmAppointment(apptId, pending.preferred_day_2, pending.preferred_time_2);
+    const dt2 = pending.preferred_datetime_2
+    ? new Date(pending.preferred_datetime_2)
+    : undefined;
+    await confirmAppointment(apptId, pending.preferred_day_2, pending.preferred_time_2, dt2);
     await clearOwnerPendingAction(apptId);
     await sendMessage(clientPhone,
       `✅ *¡Tu turno fue confirmado!*\n\n` +
@@ -299,33 +369,38 @@ async function handleOwnerMessage(
     await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`, business.bot_number);
 
   } else if (msg.startsWith('3')) {
-    const parts = rawMsg.trim().split(' ');
-    if (parts.length < 3) {
-      await sendMessage(phone,
-        `Para ofrecer otro horario escribí:\n*3 [día] [hora]*\n\nEjemplo: _3 miércoles 17:00_`, business.bot_number
-      );
-      return;
-    }
-    const offerDay = parts[1];
-    const offerTime = parts.slice(2).join(' ');
-
-    await rejectAppointment(apptId);
-    await updateConversation(clientPhone, 'cliente_respondiendo_contraoferta', {
-      appointmentId: apptId,
-      counterOfferDay: offerDay,
-      counterOfferTime: offerTime,
-    });
-    await sendMessage(clientPhone,
-      `Hola ${pending.name} 👋\n\n` +
-      `Lamentablemente no tenemos disponibilidad en los horarios que pediste.\n\n` +
-      `Te ofrecemos:\n📅 *${offerDay} a las ${offerTime}*\n\n` +
-      `¿Lo aceptás? Respondé *sí* o *no*.`, business.bot_number
-    );
-    await sendMessage(phone, `✅ Le envié la contraoferta a ${pending.name}. Esperando su respuesta.`, business.bot_number);
-
-  } else {
+  const parts = rawMsg.trim().split(' ');
+  // Formato esperado: "3 17/06/2025 14:00"
+  if (parts.length < 3 || !isValidDate(parts[1]) || !isValidTime(parts[2])) {
     await sendMessage(phone,
-      `No entendí. Respondé:\n*1* → Confirmar opción 1\n*2* → Confirmar opción 2\n*3 [día] [hora]* → Ofrecer otro horario`, business.bot_number
+      `Para ofrecer otro horario escribí:\n*3 DD/MM/YYYY HH:MM*\n\nEjemplo: _3 17/06/2025 14:00_`,
+      business.bot_number
     );
+    return;
+  }
+
+  const offerDate = parts[1];
+  const offerTime = parts[2];
+  const offerDatetime = parseDateTime(offerDate, offerTime);
+
+  await rejectAppointment(apptId);
+  await updateConversation(clientPhone, 'cliente_respondiendo_contraoferta', {
+    appointmentId: apptId,
+    counterOfferDay: offerDate,
+    counterOfferTime: offerTime,
+    counterOfferDatetime: offerDatetime.toISOString(),
+  });
+
+  await sendMessage(clientPhone,
+    `Hola ${pending.name} 👋\n\n` +
+    `Lamentablemente no tenemos disponibilidad en los horarios que pediste.\n\n` +
+    `Te ofrecemos:\n📅 *${formatDateTimeReadable(offerDatetime)}*\n\n` +
+    `¿Lo aceptás? Respondé *sí* o *no*.`,
+    business.bot_number
+  );
+  await sendMessage(phone,
+    `✅ Le envié la contraoferta a ${pending.name}. Esperando su respuesta.`,
+    business.bot_number
+  );
   }
 }
