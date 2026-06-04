@@ -41,14 +41,14 @@ export async function handleIncomingMessage(
     if (msg === 'menú' || msg === 'menu') {
       await updateConversation(phone, 'inicio', {});
       const fresh = { ...conversation, state: 'inicio', context: {} };
-      await processMessage(fresh, message, phone, business, isOwner);
+      await processMessage(fresh, message, phone, business, false);
       return;
     }
 
     if (msg === 'cancelar') {
       await updateConversation(phone, 'cancelar_turno', conversation.context);
       const withCancel = { ...conversation, state: 'cancelar_turno' };
-      await processMessage(withCancel, message, phone, business, isOwner);
+      await processMessage(withCancel, message, phone, business, false);
       return;
     }
   }

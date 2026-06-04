@@ -71,31 +71,31 @@ export async function processMessage(
   switch (state) {
 
     case 'inicio':
-      await sendMessage(phone, MENU_PRINCIPAL);
+      await sendMessage(phone, MENU_PRINCIPAL, business.bot_number);
       await updateConversation(phone, 'menu_principal', {});
       break;
 
     case 'menu_principal':
       if (msg === '1') {
-        await sendMessage(phone, SERVICIOS);
-        await sendMessage(phone, 'Escribí *menú* para volver al inicio o *3* para pedir turno.');
+        await sendMessage(phone, SERVICIOS, business.bot_number);
+        await sendMessage(phone, 'Escribí *menú* para volver al inicio o *3* para pedir turno.',business.bot_number);
       } else if (msg === '2') {
-        await sendMessage(phone, HORARIOS);
+        await sendMessage(phone, HORARIOS, business.bot_number);
       } else if (msg === '3') {
-        await sendMessage(phone, '📝 ¡Perfecto! Vamos con tu turno.\n\n¿Cuál es tu *nombre completo*?');
+        await sendMessage(phone, '📝 ¡Perfecto! Vamos con tu turno.\n\n¿Cuál es tu *nombre completo*?', business.bot_number);
         await updateConversation(phone, 'turno_nombre', {});
       } else if (msg === '4') {
-        await sendMessage(phone, '👩‍⚕️ En breve la profesional se comunica con vos.');
+        await sendMessage(phone, '👩‍⚕️ En breve la profesional se comunica con vos.', business.bot_number);
         await notifyOwner(business, `📲 ${phone} quiere hablar directamente con vos.`);
       } else {
-        await sendMessage(phone, 'Por favor elegí una opción del 1 al 4.');
+        await sendMessage(phone, 'Por favor elegí una opción del 1 al 4.', business.bot_number);
       }
       break;
 
     case 'turno_nombre': {
       const newCtx: FlowContext = { name: incomingMessage.trim() };
       await updateConversation(phone, 'turno_servicio', newCtx);
-      await sendMessage(phone, `¡Gracias, ${incomingMessage.trim()}! 😊\n\n${SERVICIOS}\n\n¿Qué servicio necesitás? Respondé con el número.`);
+      await sendMessage(phone, `¡Gracias, ${incomingMessage.trim()}! 😊\n\n${SERVICIOS}\n\n¿Qué servicio necesitás? Respondé con el número.`, business.bot_number);
       break;
     }
 
@@ -106,33 +106,33 @@ export async function processMessage(
       };
       const servicio = servicios[msg];
       if (!servicio) {
-        await sendMessage(phone, 'Por favor elegí una opción del 1 al 5.');
+        await sendMessage(phone, 'Por favor elegí una opción del 1 al 5.', business.bot_number);
         return;
       }
       await updateConversation(phone, 'turno_dia1', { ...context, service: servicio });
       await sendMessage(phone,
         `Perfecto, anotamos *${servicio}*. 📋\n\n` +
         `Necesito *dos opciones de turno* por si la primera no tiene disponibilidad.\n\n` +
-        `📅 *Opción 1:* ¿Qué día preferís?`
+        `📅 *Opción 1:* ¿Qué día preferís?`, business.bot_number
       );
       break;
     }
 
     case 'turno_dia1':
       await updateConversation(phone, 'turno_hora1', { ...context, preferredDay: incomingMessage.trim() });
-      await sendMessage(phone, `⏰ ¿Y en qué horario para esa opción?`);
+      await sendMessage(phone, `⏰ ¿Y en qué horario para esa opción?`, business.bot_number);
       break;
 
     case 'turno_hora1':
       await updateConversation(phone, 'turno_dia2', { ...context, preferredTime: incomingMessage.trim() });
       await sendMessage(phone,
-        `✅ Opción 1 anotada.\n\n📅 *Opción 2 (alternativa):* ¿Qué otro día te vendría bien?`
+        `✅ Opción 1 anotada.\n\n📅 *Opción 2 (alternativa):* ¿Qué otro día te vendría bien?`, business.bot_number
       );
       break;
 
     case 'turno_dia2':
       await updateConversation(phone, 'turno_hora2', { ...context, preferredDay2: incomingMessage.trim() });
-      await sendMessage(phone, `⏰ ¿Y el horario para esa segunda opción?`);
+      await sendMessage(phone, `⏰ ¿Y el horario para esa segunda opción?`, business.bot_number);
       break;
 
     case 'turno_hora2': {
@@ -169,7 +169,7 @@ export async function processMessage(
         `• Servicio: ${finalCtx.service}\n` +
         `• Opción 1: ${finalCtx.preferredDay} ${finalCtx.preferredTime}\n` +
         `• Opción 2: ${finalCtx.preferredDay2} ${finalCtx.preferredTime2}\n\n` +
-        `⏳ En breve te confirmamos el turno. ¡Gracias!`
+        `⏳ En breve te confirmamos el turno. ¡Gracias!`, business.bot_number
       );
 
       await updateConversation(phone, 'esperando_confirmacion', { appointmentId });
@@ -177,7 +177,7 @@ export async function processMessage(
     }
 
     case 'esperando_confirmacion':
-      await sendMessage(phone, '⏳ Tu solicitud ya está en proceso. En breve te confirmamos. ¡Gracias por tu paciencia!');
+      await sendMessage(phone, '⏳ Tu solicitud ya está en proceso. En breve te confirmamos. ¡Gracias por tu paciencia!', business.bot_number);
       break;
 
     case 'cancelar_turno': {
@@ -185,7 +185,7 @@ export async function processMessage(
 
       if (!turno) {
         await sendMessage(phone,
-          'No encontramos ningún turno confirmado para cancelar.\n\nEscribí *menú* para volver al inicio.'
+          'No encontramos ningún turno confirmado para cancelar.\n\nEscribí *menú* para volver al inicio.', business.bot_number
         );
         await updateConversation(phone, 'menu_principal', {});
         return;
@@ -196,7 +196,7 @@ export async function processMessage(
           `⚠️ ¿Confirmás la cancelación de tu turno?\n\n` +
           `📅 ${turno.confirmed_day} a las ${turno.confirmed_time}\n` +
           `💆 Servicio: ${turno.service}\n\n` +
-          `Respondé *sí* para cancelar o *no* para mantenerlo.`
+          `Respondé *sí* para cancelar o *no* para mantenerlo.`, business.bot_number
         );
         await updateConversation(phone, 'cancelar_turno', { appointmentId: turno.id });
         return;
@@ -208,14 +208,14 @@ export async function processMessage(
           `❌ Turno cancelado:\n👤 ${turno.name}\n📅 ${turno.confirmed_day} ${turno.confirmed_time}\n💆 ${turno.service}`
         );
         await sendMessage(phone,
-          `✅ Tu turno fue cancelado.\n\nSi querés sacar uno nuevo escribí *menú*. ¡Hasta pronto! 👋`
+          `✅ Tu turno fue cancelado.\n\nSi querés sacar uno nuevo escribí *menú*. ¡Hasta pronto! 👋`, business.bot_number
         );
         await updateConversation(phone, 'menu_principal', {});
       } else if (msg === 'no') {
-        await sendMessage(phone, '👍 Perfecto, tu turno sigue confirmado. ¡Te esperamos!');
+        await sendMessage(phone, '👍 Perfecto, tu turno sigue confirmado. ¡Te esperamos!', business.bot_number);
         await updateConversation(phone, 'menu_principal', {});
       } else {
-        await sendMessage(phone, 'Respondé *sí* para cancelar el turno o *no* para mantenerlo.');
+        await sendMessage(phone, 'Respondé *sí* para cancelar el turno o *no* para mantenerlo.', business.bot_number);
       }
       break;
     }
@@ -230,17 +230,17 @@ export async function processMessage(
         await sendMessage(phone,
           `✅ *¡Turno confirmado!*\n\n` +
           `📅 ${context.counterOfferDay} a las ${context.counterOfferTime}\n` +
-          `💆 Servicio: ${appt.service}\n\n¡Te esperamos! 🦶`
+          `💆 Servicio: ${appt.service}\n\n¡Te esperamos! 🦶`, business.bot_number
         );
         await notifyOwner(business,
           `✅ ${appt.name} aceptó el turno:\n📅 ${context.counterOfferDay} ${context.counterOfferTime}`
         );
         await updateConversation(phone, 'menu_principal', {});
       } else if (msg === 'no') {
-        await sendMessage(phone, `Entendemos. Escribí *menú* para solicitar un nuevo turno.`);
+        await sendMessage(phone, `Entendemos. Escribí *menú* para solicitar un nuevo turno.`, business.bot_number);
         await updateConversation(phone, 'menu_principal', {});
       } else {
-        await sendMessage(phone, 'Respondé *sí* para aceptar o *no* para rechazar el horario propuesto.');
+        await sendMessage(phone, 'Respondé *sí* para aceptar o *no* para rechazar el horario propuesto.', business.bot_number);
       }
       break;
     }
@@ -249,7 +249,7 @@ export async function processMessage(
       break;
 
     default:
-      await sendMessage(phone, MENU_PRINCIPAL);
+      await sendMessage(phone, MENU_PRINCIPAL, business.bot_number);
       await updateConversation(phone, 'menu_principal', {});
   }
 }
@@ -265,7 +265,7 @@ async function handleOwnerMessage(
   const pending = await getOwnerPendingAction();
 
   if (!pending) {
-    await sendMessage(phone, '📭 No hay solicitudes de turno pendientes en este momento.');
+    await sendMessage(phone, '📭 No hay solicitudes de turno pendientes en este momento.', business.bot_number);
     return;
   }
 
@@ -280,9 +280,9 @@ async function handleOwnerMessage(
       `👤 ${pending.name}\n` +
       `💆 Servicio: ${pending.service}\n` +
       `📅 ${pending.preferred_day} a las ${pending.preferred_time}\n\n` +
-      `¡Te esperamos! 🦶`
+      `¡Te esperamos! 🦶`, business.bot_number
     );
-    await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`);
+    await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`, business.bot_number);
 
   } else if (msg === '2') {
     await confirmAppointment(apptId, pending.preferred_day_2, pending.preferred_time_2);
@@ -292,15 +292,15 @@ async function handleOwnerMessage(
       `👤 ${pending.name}\n` +
       `💆 Servicio: ${pending.service}\n` +
       `📅 ${pending.preferred_day_2} a las ${pending.preferred_time_2}\n\n` +
-      `¡Te esperamos! 🦶`
+      `¡Te esperamos! 🦶`, business.bot_number
     );
-    await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`);
+    await sendMessage(phone, `✅ Confirmado. Le avisé a ${pending.name}.`, business.bot_number);
 
   } else if (msg.startsWith('3')) {
     const parts = rawMsg.trim().split(' ');
     if (parts.length < 3) {
       await sendMessage(phone,
-        `Para ofrecer otro horario escribí:\n*3 [día] [hora]*\n\nEjemplo: _3 miércoles 17:00_`
+        `Para ofrecer otro horario escribí:\n*3 [día] [hora]*\n\nEjemplo: _3 miércoles 17:00_`, business.bot_number
       );
       return;
     }
@@ -317,13 +317,13 @@ async function handleOwnerMessage(
       `Hola ${pending.name} 👋\n\n` +
       `Lamentablemente no tenemos disponibilidad en los horarios que pediste.\n\n` +
       `Te ofrecemos:\n📅 *${offerDay} a las ${offerTime}*\n\n` +
-      `¿Lo aceptás? Respondé *sí* o *no*.`
+      `¿Lo aceptás? Respondé *sí* o *no*.`, business.bot_number
     );
-    await sendMessage(phone, `✅ Le envié la contraoferta a ${pending.name}. Esperando su respuesta.`);
+    await sendMessage(phone, `✅ Le envié la contraoferta a ${pending.name}. Esperando su respuesta.`, business.bot_number);
 
   } else {
     await sendMessage(phone,
-      `No entendí. Respondé:\n*1* → Confirmar opción 1\n*2* → Confirmar opción 2\n*3 [día] [hora]* → Ofrecer otro horario`
+      `No entendí. Respondé:\n*1* → Confirmar opción 1\n*2* → Confirmar opción 2\n*3 [día] [hora]* → Ofrecer otro horario`, business.bot_number
     );
   }
 }
