@@ -37,14 +37,19 @@ export async function saveAppointmentRequest(data: {
   preferredTime: string;
   preferredDay2: string;
   preferredTime2: string;
+  preferredDatetime1?: Date;
+  preferredDatetime2?: Date;
 }): Promise<number> {
   const result = await pool.query(
     `INSERT INTO appointment_requests 
-     (phone, name, service, preferred_day, preferred_time, preferred_day_2, preferred_time_2, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente') RETURNING id`,
+      (phone, name, service, preferred_day, preferred_time, preferred_day_2, preferred_time_2,
+      preferred_datetime_1, preferred_datetime_2, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pendiente') RETURNING id`,
     [data.phone, data.name, data.service,
      data.preferredDay, data.preferredTime,
-     data.preferredDay2, data.preferredTime2]
+     data.preferredDay2, data.preferredTime2,
+     data.preferredDatetime1 || null,
+     data.preferredDatetime2 || null]
   );
   return result.rows[0].id;
 }
@@ -57,13 +62,14 @@ export async function getAppointmentById(id: number) {
 }
 
 export async function confirmAppointment(
-  id: number, day: string, time: string
+  id: number, day: string, time: string, confirmedDatetime?: Date
 ): Promise<void> {
   await pool.query(
     `UPDATE appointment_requests 
-     SET status = 'confirmado', confirmed_day = $1, confirmed_time = $2 
-     WHERE id = $3`,
-    [day, time, id]
+     SET status = 'confirmado', confirmed_day = $1, confirmed_time = $2,
+         confirmed_datetime = $3
+     WHERE id = $4`,
+    [day, time, confirmedDatetime || null, id]
   );
 }
 
@@ -87,7 +93,8 @@ export async function getOwnerPendingAction() {
   const result = await pool.query(
     `SELECT opa.*, ar.phone as client_phone, ar.name, ar.service,
             ar.preferred_day, ar.preferred_time,
-            ar.preferred_day_2, ar.preferred_time_2
+            ar.preferred_day_2, ar.preferred_time_2,
+            ar.preferred_datetime_1, ar.preferred_datetime_2
      FROM owner_pending_actions opa
      JOIN appointment_requests ar ON opa.appointment_id = ar.id
      ORDER BY opa.created_at DESC LIMIT 1`
