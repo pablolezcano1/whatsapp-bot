@@ -29,7 +29,7 @@ router.post('/', async (req: Request, res: Response) => {
       const { sendMessage } = await import('../services/whatsapp.service');
       await sendMessage(from,
         '¡Hola! Por el momento solo puedo leer mensajes de texto 😊\n\n' +
-        'Escribí *menú* para ver las opciones disponibles.'
+        'Escribí *menú* para ver las opciones disponibles.', to
       );
       return;
     }
