@@ -35,21 +35,16 @@ export async function saveAppointmentRequest(data: {
   service: string;
   preferredDay: string;
   preferredTime: string;
-  preferredDay2: string;
-  preferredTime2: string;
   preferredDatetime1?: Date;
-  preferredDatetime2?: Date;
 }): Promise<number> {
   const result = await pool.query(
     `INSERT INTO appointment_requests 
-      (phone, name, service, preferred_day, preferred_time, preferred_day_2, preferred_time_2,
-      preferred_datetime_1, preferred_datetime_2, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pendiente') RETURNING id`,
+      (phone, name, service, preferred_day, preferred_time,
+      preferred_datetime_1, status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pendiente') RETURNING id`,
     [data.phone, data.name, data.service,
      data.preferredDay, data.preferredTime,
-     data.preferredDay2, data.preferredTime2,
-     data.preferredDatetime1 || null,
-     data.preferredDatetime2 || null]
+     data.preferredDatetime1 || null]
   );
   return result.rows[0].id;
 }
