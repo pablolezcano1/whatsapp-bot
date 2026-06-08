@@ -36,6 +36,7 @@ export async function saveAppointmentRequest(data: {
   preferredDay: string;
   preferredTime: string;
   preferredDatetime1?: Date;
+  businessId: number; 
 }): Promise<number> {
   const result = await pool.query(
     `INSERT INTO appointment_requests 
@@ -156,4 +157,38 @@ export async function getOrCreateConversationForBusiness(
     [phone, 'inicio', {}, businessId]
   );
   return created.rows[0];
+}
+
+// Busca turnos confirmados que sean en las próximas 23 a 25 horas
+// Se corre cada hora — la ventana de 2hs evita duplicados si el cron se corre dos veces seguidas
+export async function getUpcomingAppointments() {
+  const result = await pool.query(
+    `SELECT 
+       ar.id,
+       ar.phone,
+       ar.name,
+       ar.service,
+       ar.confirmed_day,
+       ar.confirmed_time,
+       ar.confirmed_datetime,
+       ar.reminder_sent,
+       b.bot_number,
+       b.name as business_name
+     FROM appointment_requests ar
+     JOIN businesses b ON ar.business_id = b.id
+     WHERE ar.status = 'confirmado'
+       AND ar.reminder_sent = false
+       AND ar.confirmed_datetime IS NOT NULL
+       AND ar.confirmed_datetime BETWEEN 
+           NOW() + INTERVAL '23 hours' 
+           AND NOW() + INTERVAL '25 hours'`
+  );
+  return result.rows;
+}
+
+export async function markReminderSent(id: number): Promise<void> {
+  await pool.query(
+    `UPDATE appointment_requests SET reminder_sent = true WHERE id = $1`,
+    [id]
+  );
 }
