@@ -33,20 +33,19 @@ _Los precios se informan al confirmar el turno._`;
 
 const HORARIOS = `🕐 *Horarios de atención:*
 
-📅 Lunes a Viernes: 9:00 a 18:00
-📅 Sábados: 9:00 a 13:00
-📵 Domingos y feriados: cerrado
+📅 Lunes a Viernes: 08:00 a 19:00
+📵 Sábados y Domingos: cerrado
 
-📍 *Dirección:* [Tu dirección aquí]`;
+📍 *Dirección:* Av Sarmiento 453 - Buenavista Plaza`;
 
-const MENU_PRINCIPAL = `👋 ¡Hola! Bienvenido/a a *[Nombre del negocio]* 🦶
+const MENU_PRINCIPAL = `👋 ¡Hola! Bienvenido/a a Milena Podoestetica* 🦶
 
 ¿En qué te puedo ayudar?
 
 1️⃣ Ver servicios y precios
 2️⃣ Horarios y ubicación
 3️⃣ Solicitar un turno
-4️⃣ Hablar con la profesional
+4️⃣ Contactar con la profesional
 
 Respondé con el número de tu opción.`;
 
@@ -129,7 +128,7 @@ export async function processMessage(
         await sendMessage(phone,
           `⚠️ No entendí la fecha.\n\n` +
           `Escribila así: *Lunes 8 de Junio*\n` +
-          `O por ejemplo: *Jueves 4 de Junio*`,
+          `O por ejemplo: *Miercoles 1 de Julio*`,
           business.bot_number
         );
         return;
@@ -175,6 +174,7 @@ export async function processMessage(
         preferredDay: finalCtx.preferredDay || '',
         preferredTime: finalCtx.preferredTime || '',
         preferredDatetime1: dt1,
+        businessId: business.id, 
       });
 
       await saveOwnerPendingAction(appointmentId);
