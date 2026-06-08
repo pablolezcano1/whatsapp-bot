@@ -9,7 +9,7 @@ const MESES: Record<string, number> = {
 export function parseNaturalDate(input: string): Date | null {
   const normalized = input.trim().toLowerCase();
 
-  // Busca un número (día) y un nombre de mes en el string
+
   const regexDia = /\b(\d{1,2})\b/;
   const regexMes = new RegExp(`\\b(${Object.keys(MESES).join('|')})\\b`);
 
@@ -20,8 +20,12 @@ export function parseNaturalDate(input: string): Date | null {
 
   const dia = parseInt(diaMatch[1]);
   const mes = MESES[mesMatch[1]];
-  const year = 2026;
-
+ 
+  const now = new Date();
+  let year = now.getFullYear();
+  const fechaEsteAnio = new Date(year, mes - 1, dia);
+  if (fechaEsteAnio < now) year++;
+ 
   const date = new Date(year, mes - 1, dia);
 
   // Verifica que la fecha sea real (ej: 31 de febrero no existe)
@@ -84,4 +88,33 @@ export function formatDateShort(dt: Date): string {
   const dia = String(dt.getDate()).padStart(2, '0');
   const mes = String(dt.getMonth() + 1).padStart(2, '0');
   return `${dia}/${mes}/${dt.getFullYear()}`;
+}
+
+export function parseNaturalDateTime(dateText: string, time: string): Date | null {
+  const meses: Record<string, number> = {
+    enero: 0, febrero: 1, marzo: 2, abril: 3,
+    mayo: 4, junio: 5, julio: 6, agosto: 7,
+    septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
+  };
+
+  const regex = /(?:\w+\s+)?(\d{1,2})\s+de\s+(\w+)/i;
+  const match = dateText.toLowerCase().match(regex);
+
+  if (!match) return null;
+
+  const dia = parseInt(match[1]);
+  const mesStr = match[2].toLowerCase();
+  const mes = meses[mesStr];
+
+  if (mes === undefined || isNaN(dia)) return null;
+
+  const [hours, minutes] = time.split(':').map(Number);
+
+  // Determina el año: si el mes ya pasó este año, usa el próximo
+  const now = new Date();
+  let year = now.getFullYear();
+  const fechaEsteAnio = new Date(year, mes, dia);
+  if (fechaEsteAnio < now) year++;
+
+  return new Date(year, mes, dia, hours, minutes);
 }

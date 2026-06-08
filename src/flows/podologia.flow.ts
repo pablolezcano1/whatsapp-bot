@@ -1,5 +1,5 @@
 import { sendMessage, notifyOwner } from '../services/whatsapp.service';
-import { isValidDate, isValidTime, parseDateTime, formatDateTimeReadable, parseNaturalDate } from '../utils/datetime.utils';
+import { isValidDate, isValidTime, parseDateTime, formatDateTimeReadable, parseNaturalDate, parseNaturalDateTime } from '../utils/datetime.utils';
 import {
   updateConversation, saveAppointmentRequest,
   getOwnerPendingAction, confirmAppointment,
@@ -324,30 +324,54 @@ async function handleOwnerMessage(
 
   } else if (msg.startsWith('3')) {
     const parts = rawMsg.trim().split(' ');
-    if (parts.length < 3 || !isValidDate(parts[1]) || !isValidTime(parts[2])) {
+      if (parts.length < 5) {
       await sendMessage(phone,
-        `Para ofrecer otro horario escribí:\n*3 DD/MM/YYYY HH:MM*\n\nEjemplo: _3 17/06/2026 14:00_`,
+        `Para ofrecer otro horario escribí:\n*3 [día semana] [día] de [mes] [HH:MM]*\n\n` +
+        `Ejemplo: _3 jueves 18 de junio 10:00_`,
         business.bot_number
       );
       return;
     }
 
-    const offerDate = parts[1];
-    const offerTime = parts[2];
-    const offerDatetime = parseDateTime(offerDate, offerTime);
+    // Extraer la hora (último elemento)
+    const offerTime = parts[parts.length - 1];
+    if (!isValidTime(offerTime)) {
+      await sendMessage(phone,
+        `El horario no es válido. Usá formato *HH:MM*\nEjemplo: _3 jueves 18 de junio 10:00_`,
+        business.bot_number
+      );
+      return;
+    }
+
+    // Todo lo del medio es la fecha en texto: "jueves 18 de junio"
+    const dateText = parts.slice(1, parts.length - 1).join(' '); // "jueves 18 de junio"
+
+    // Parsear la fecha natural
+    const offerDatetime = parseNaturalDateTime(dateText, offerTime);
+    if (!offerDatetime) {
+      await sendMessage(phone,
+        `No entendí la fecha. Usá el formato:\n*3 [día semana] [día] de [mes] [HH:MM]*\n\n` +
+        `Ejemplo: _3 jueves 18 de junio 10:00_`,
+        business.bot_number
+      );
+      return;
+    }
+
+    // Texto legible para mostrar al cliente
+    const offerDateReadable = dateText; // "jueves 18 de junio"
 
     await rejectAppointment(apptId);
     await updateConversation(clientPhone, 'cliente_respondiendo_contraoferta', {
       appointmentId: apptId,
-      counterOfferDay: offerDate,
+      counterOfferDay: offerDateReadable,
       counterOfferTime: offerTime,
       counterOfferDatetime: offerDatetime.toISOString(),
     });
 
     await sendMessage(clientPhone,
       `Hola ${pending.name} 👋\n\n` +
-      `Lamentablemente no tenemos disponibilidad en el horario que pediste.\n\n` +
-      `Te ofrecemos:\n📅 *${formatDateTimeReadable(offerDatetime)}*\n\n` +
+      `Lamentablemente no tenemos disponibilidad en los horarios que pediste.\n\n` +
+      `Te ofrecemos:\n📅 *${offerDateReadable} a las ${offerTime}*\n\n` +
       `¿Lo aceptás? Respondé *sí* o *no*.`,
       business.bot_number
     );
@@ -360,9 +384,10 @@ async function handleOwnerMessage(
     // Mensaje no reconocido — recordarle al dueño qué puede hacer
     await sendMessage(phone,
       `📋 Solicitud pendiente de *${pending.name}*:\n\n` +
-      `💆 ${pending.service}\n` +
-      `📅 ${pending.preferred_day} a las ${pending.preferred_time}\n\n` +
-      `Respondé:\n*1* → Confirmar turno\n*3 DD/MM/YYYY HH:MM* → Ofrecer otro horario`,
+      `- ${pending.service}\n.` +
+      `- ${pending.preferred_day} a las ${pending.preferred_time}\n\n.` +
+      `Respondé:\n*1* para Confirmar el turno\n*3 [día] [día] de [mes] [HH:MM]* para Ofrecer otro horario\n` +
+      `_Ejemplo: 3 viernes 10 de agosto 14:00_`,
       business.bot_number
     );
   }
