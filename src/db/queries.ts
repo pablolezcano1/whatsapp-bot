@@ -41,11 +41,12 @@ export async function saveAppointmentRequest(data: {
   const result = await pool.query(
     `INSERT INTO appointment_requests 
       (phone, name, service, preferred_day, preferred_time,
-      preferred_datetime_1, status)
+      preferred_datetime_1, business_id, status)
      VALUES ($1, $2, $3, $4, $5, $6, 'pendiente') RETURNING id`,
     [data.phone, data.name, data.service,
      data.preferredDay, data.preferredTime,
-     data.preferredDatetime1 || null]
+     data.preferredDatetime1 || null,
+     data.businessId]
   );
   return result.rows[0].id;
 }

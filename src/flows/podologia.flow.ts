@@ -384,8 +384,8 @@ async function handleOwnerMessage(
     // Mensaje no reconocido — recordarle al dueño qué puede hacer
     await sendMessage(phone,
       `📋 Solicitud pendiente de *${pending.name}*:\n\n` +
-      `- ${pending.service}\n.` +
-      `- ${pending.preferred_day} a las ${pending.preferred_time}\n\n.` +
+      `- ${pending.service}\n` +
+      `- ${pending.preferred_day} a las ${pending.preferred_time}\n\n` +
       `Respondé:\n*1* para Confirmar el turno\n*3 [día] [día] de [mes] [HH:MM]* para Ofrecer otro horario\n` +
       `_Ejemplo: 3 viernes 10 de agosto 14:00_`,
       business.bot_number
